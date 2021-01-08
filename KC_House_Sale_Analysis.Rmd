@@ -1,0 +1,322 @@
+---
+title: "King County Housing Data"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+List of libraries used
+```{r}
+library(viridis)
+library(zipcode)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(plotly)
+library(tidyverse)
+library(formattable)
+library(tibble)
+```
+
+
+# Reading the file 
+```{r}
+filepath <- paste(getwd(),"/kc_house_data.csv",sep='')
+my_df <- read.csv(filepath,stringsAsFactors = FALSE)
+
+#order zipcode col in ascending order
+#using dplyr library
+my_df <- arrange(my_df, zipcode)
+```
+
+
+# Data preparation for analysis
+Getting City and State names for respective zipcodes.
+For easy understanding, extracted City and State names based on the zipcodes given in the file. Later, used this data to show in the tabels.
+```{r}
+#loading the data for zipcodes
+#using library 'ziocode'
+data(zipcode)
+
+#extracting all the zicodes from the dataset
+city_state_names_for_zipcodes <- data.frame(c(my_df$zipcode))
+
+#mapping the zipcodes to their respective states and cities
+city_state_names_for_zipcodes$zip = clean.zipcodes(city_state_names_for_zipcodes$c.my_df.zipcode.)
+data(zipcode)
+city_state_names_for_zipcodes=merge(city_state_names_for_zipcodes,zipcode, by.x = 'zip', by.y='zip')
+
+#merging city and state columns from the new dataframe to my_data
+my_data <- cbind(my_df,city_state_names_for_zipcodes$city,city_state_names_for_zipcodes$state)
+
+#remaning columns
+colnames(my_data)[22] <- "City"
+colnames(my_data)[23] <- "State"
+```
+
+
+Extracting the year and month from the column "date" (was in the format "20141013T000000") which indicates the year in which the house was sold. The following code is to get the month, date and year in which the house was sold.
+
+```{r}
+#extracting the date from the column "date"
+get_date <- as.Date(my_data$date,"%Y%m%dT000000")
+
+#extracting just the year from the date
+year_sold <- as.numeric(format(get_date,'%Y'))
+
+#extracting the month in which the house was sold
+month_sold <- as.numeric(format(get_date,'%m'))
+
+#adding a column with just the year sold and month sold to the data frame "my_data"
+my_data <- cbind(my_data,year_sold, month_sold)
+```
+
+## Visualizing the data
+# Graph 1
+
+Number of houses built in the years 2000 to 2015 in King County, USA
+```{r}
+#used dplyr, ggolot2 and tidyr libraries
+#subsetting data with year built >= 2000
+newdf <- filter(my_data, yr_built >= "2000")
+
+#counting the no. of houses built for each year
+houses_built_per_year <- as.data.frame(table(newdf$yr_built))
+
+# using ggplot 2 to plot the above data
+ggplot(houses_built_per_year, aes(x = Var1, y = Freq)) +
+    geom_bar(stat = "identity",fill = "#FF6666")+
+    geom_text(aes(label=Freq), vjust=-0.9)+
+    ylim(c(0, 600))+
+    labs(title="No. of houses built in each year", y="Count", x="Years")+
+    theme(plot.title=element_text(size=16,
+                                  face="bold",
+                                  family="Times",
+                                  color="black",
+                                  hjust=0.5,
+                                  lineheight=1.2),
+                                  axis.title = element_text(colour = "black", size = 12))
+```
+
+<p style="color:red">From the above graph, we can see that the year 2014 has the most number of houses built </p>
+
+
+# Graph 2
+Average price of houses with 0-10 bedrooms over the years 2000 to 2015
+```{r}
+#used potly library
+#sorting the the column "bedrooms"
+newdf <- newdf[order(newdf$bedrooms),]
+
+#plotting using plotly
+price <- newdf$price/100000
+bedroom <- c(0:10)
+
+plot_ly(newdf, x = ~sqft_living, y = ~price, type = 'scatter', mode = 'markers', color = ~bedrooms, text = ~bedrooms,
+        marker = list(opacity = 0.5),width = 900,height = 500)%>%
+        layout(title = 'Price distribution by sqft and no. of bedrooms',
+        xaxis = list(showgrid = FALSE, title = "Sqft"),
+        yaxis = list(showgrid = FALSE))%>%
+    add_trace(
+        type = 'scatter',
+        mode = 'markers',
+        hovertemplate = paste('Price: %{y:$.2f}','<br><b>Sqft</b>: %{x}<br>','Bedrooms: %{text}<extra></extra>'),
+        showlegend = FALSE
+  )
+```
+
+<p style="color:red"> When you click on the graph and hover over each bubble, it gives you a snapshot of the number of bedrooms you get for that price and sqft </p>
+
+# Graph 3
+Which Zipcode has the most expensive houses. 
+Most desirable zipcodes in King County
+
+```{r}
+#used tidyverse
+#getting the mean and median price of the house
+avg_house_price <- as.data.frame(aggregate(price ~ zipcode, newdf, mean))
+median_house_price <- as.data.frame(aggregate(price ~ zipcode, newdf, median))
+avg_median_merge <- merge(avg_house_price,median_house_price,by="zipcode")
+
+#using plotly to plot the mean and median house prices per zipcode
+plot_ly(x = as.factor(avg_median_merge$zipcode),width = 900,height = 500) %>%
+  layout(title = "Average and Median house prices per zipcode",
+         xaxis = list(title = "Zipcode"),
+         yaxis = list (title = "Price"),
+         autosize = F) %>%
+  add_lines(y = avg_median_merge$price.x, color = I("red"), name = "Average price",hoverinfo = 'text',
+        text = ~paste('</br> Avg price: ', avg_median_merge$price.x,
+                      '</br> Zipcode: ', avg_median_merge$zipcode)) %>%
+  add_lines(y = avg_median_merge$price.y, color = I("yellow"), name = "Median price",hoverinfo = 'text',
+        text = ~paste('</br> Median price: ', avg_median_merge$price.y,
+                      '</br> Zipcode: ', avg_median_merge$zipcode))
+```
+
+<p style="color:red"> When you click on the graph above and hover over any point on the line, it shows you the mean and median price of houses in that zip code. The red line shows the average price of the houses, and the yellow line shows the median price of houses. We can see that the price gradually increases for the as we move from zipcode 98039 to 98039. Compared to other zip codes, the mean and median price in 98039 is higher. </p>
+
+# Table 1
+
+### Month and City wise split of the no. of houses sold in the year 2014 and 2015 in King County, USA
+
+```{r}
+#used formattable, dplyr and tibble libraries
+#subsetting data for year 2014
+year_2014 <- filter(my_data, year_sold == "2014")
+
+year_2015 <- filter(my_data, year_sold == "2015")
+
+#creating a table containting number of houses sold in each month in the year 2014 per City
+table_2014 <- as.data.frame.matrix(table(year_2014$City, year_2014$month_sold))
+colnames(table_2014) <- c("May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
+
+#naming the first col in the matrix
+table_2014 <- table_2014 %>% 
+  rownames_to_column(var = "City")
+
+#styling the table
+
+#creating a function to check the max value in each col
+max.col.may = function(x)(max(table_2014$May)==x)
+max.col.jun = function(y)(max(table_2014$Jun)==y)
+max.col.jul = function(z)(max(table_2014$Jul)==z)
+max.col.aug = function(a)(max(table_2014$Aug)==a)
+max.col.sep = function(b)(max(table_2014$Sep)==b)
+max.col.oct = function(c)(max(table_2014$Oct)==c)
+max.col.nov = function(d)(max(table_2014$Nov)==d)
+max.col.dec = function(e)(max(table_2014$Dec)==e)
+
+#formatting the table to highlight the max number each column 
+df_2014 <- formattable(table_2014, list('May' = color_bar("#FA614B66", fun = max.col.may),
+                             'Jun' = color_bar("#FA614B66", fun = max.col.jun), 
+                             'Jul' = color_bar("#FA614B66", fun = max.col.jul),
+                             'Aug' = color_bar("#FA614B66", fun = max.col.aug),
+                             'Sep' = color_bar("#FA614B66", fun = max.col.sep),
+                             'Oct' = color_bar("#FA614B66", fun = max.col.oct),
+                             'Nov' = color_bar("#FA614B66", fun = max.col.nov),
+                             'Dec' = color_bar("#FA614B66", fun = max.col.dec)))
+
+
+#creating a table containting number of houses sold in each month in the year 2014 per City
+table_2015 <- as.data.frame.matrix(table(year_2015$City, year_2015$month_sold))
+colnames(table_2015) <- c("Jan","Feb","Mar","Apr","May")
+
+#naming the first col in the matrix
+table_2015 <- table_2015 %>% 
+  rownames_to_column(var = "City")
+
+#styling the table
+
+#creating a function to check the max value in each col
+max.col.jan = function(h)(max(table_2015$Jan)==h)
+max.col.feb = function(i)(max(table_2015$Feb)==i)
+max.col.mar = function(j)(max(table_2015$Mar)==j)
+max.col.apr = function(k)(max(table_2015$Apr)==k)
+max.col.may2 = function(l)(max(table_2015$May)==l)
+
+#formatting the table to highlight the max number each column 
+df_2015 <- formattable(table_2015, align = c("c","c","c","c","c","c","c"),
+                      list('Jan' = color_bar("#FA614B66", fun = max.col.jan),
+                             'Feb' = color_bar("#FA614B66", fun = max.col.feb), 
+                             'Mar' = color_bar("#FA614B66", fun = max.col.mar),
+                             'Apr' = color_bar("#FA614B66", fun = max.col.apr),
+                             'May' = color_bar("#FA614B66", fun = max.col.may2)))
+```
+
+##### Month and City wise split of the no. of houses sold in the year 2014 in King County, USA
+```{r}
+df_2014
+```
+
+##### Month and City wise split of the no. of houses sold in the year 2015 in King County, USA
+```{r}
+df_2015
+```
+
+<p style="color:red"> From table 1, we can see that the higest number of houses sold in 2014 and 2015 were in Seattle </p>
+
+# Table 2
+
+The table below shows information regarding: Price per squarefoot in each city in 2015, the number of houses sold, average price of the houses, no. of bedrooms and bathrooms.
+
+```{r}
+
+# Calculating price per sqft for each house in in each city
+
+#filtering data 
+seattle <- filter(my_data, City == "Seattle")
+
+seattle_new <- as.data.frame.matrix(cbind(seattle$condition, seattle$price,seattle$sqft_living, seattle$bedrooms, seattle$bathrooms))
+colnames(seattle_new) <- c("Condition","Price","Sqft","Bedrooms","Bathrooms")
+
+#Condition 1 houses
+cond1 <- filter(seattle_new, Condition == "1")
+cond1_houses_sold <- nrow(cond1)
+cond1_avg_price <- paste("$", round(sum(cond1$Price)/nrow(cond1)))
+cond1_avg_sqft <- paste("$", round(sum(cond1$Sqft)/nrow(cond1)))
+cond1_avg_price_per_sqft <- paste("$", round(sum(cond1$Price/cond1$Sqft)/cond1_houses_sold))
+cond1_avg_bedrooms <- round(sum(cond1$Bedrooms)/nrow(cond1),1)
+cond1_avg_bathrooms <- round(sum(cond1$Bathrooms)/nrow(cond1))
+
+#combining columns for condition 1
+cbind_1 <- cbind(1,cond1_houses_sold,cond1_avg_price,cond1_avg_sqft,cond1_avg_price_per_sqft,cond1_avg_bedrooms,cond1_avg_bathrooms)
+
+#Condition 2 houses
+cond2 <- filter(seattle_new, Condition == "2")
+cond2_houses_sold <- nrow(cond2)
+cond2_avg_price <- paste("$", round(sum(cond2$Price)/nrow(cond2)))
+cond2_avg_sqft <- paste("$", round(sum(cond2$Sqft)/nrow(cond2)))
+cond2_avg_price_per_sqft <- paste("$", round(sum(cond2$Price/cond1$Sqft)/cond2_houses_sold))
+cond2_avg_bedrooms <- round(sum(cond2$Bedrooms)/nrow(cond2))
+cond2_avg_bathrooms <- round(sum(cond2$Bathrooms)/nrow(cond2))
+
+#combining columns for condition 1
+cbind_2 <- cbind(2,cond2_houses_sold,cond2_avg_price,cond2_avg_sqft,cond2_avg_price_per_sqft,cond2_avg_bedrooms,cond2_avg_bathrooms)
+
+#Condition 3 houses
+cond3 <- filter(seattle_new, Condition == "3")
+cond3_houses_sold <- nrow(cond3)
+cond3_avg_price <- paste("$", round(sum(cond3$Price)/nrow(cond3)))
+cond3_avg_sqft <- paste("$", round(sum(cond3$Sqft)/nrow(cond3)))
+cond3_avg_price_per_sqft <- paste("$", round(sum(cond3$Price/cond1$Sqft)/cond3_houses_sold))
+cond3_avg_bedrooms <- round(sum(cond3$Bedrooms)/nrow(cond3),1)
+cond3_avg_bathrooms <- round(sum(cond3$Bathrooms)/nrow(cond3))
+
+#combining columns for condition 3
+cbind_3 <- cbind(3,cond3_houses_sold,cond3_avg_price,cond3_avg_sqft,cond3_avg_price_per_sqft,cond3_avg_bedrooms,cond3_avg_bathrooms)
+
+#Condition 4 houses
+cond4 <- filter(seattle_new, Condition == "4")
+cond4_houses_sold <- nrow(cond4)
+cond4_avg_price <- paste("$", round(sum(cond4$Price)/nrow(cond4)))
+cond4_avg_sqft <- paste("$", round(sum(cond4$Sqft)/nrow(cond4)))
+cond4_avg_price_per_sqft <- paste("$", round(sum(cond4$Price/cond1$Sqft)/cond4_houses_sold))
+cond4_avg_bedrooms <- round(sum(cond4$Bedrooms)/nrow(cond4),1)
+cond4_avg_bathrooms <- round(sum(cond4$Bathrooms)/nrow(cond4))
+
+#combining columns for condition 4
+cbind_4 <- cbind(4,cond4_houses_sold,cond4_avg_price,cond4_avg_sqft,cond4_avg_price_per_sqft,cond4_avg_bedrooms,cond4_avg_bathrooms)
+
+#Condition 5 houses
+cond5 <- filter(seattle_new, Condition == "5")
+cond5_houses_sold <- nrow(cond5)
+cond5_avg_price <- paste("$", round(sum(cond5$Price)/nrow(cond5)))
+cond5_avg_sqft <- paste("$", round(sum(cond5$Sqft)/nrow(cond5)))
+cond5_avg_price_per_sqft <- paste("$", round(sum(cond5$Price/cond1$Sqft)/cond5_houses_sold))
+cond5_avg_bedrooms <- round(sum(cond5$Bedrooms)/nrow(cond5),1)
+cond5_avg_bathrooms <- round(sum(cond5$Bathrooms)/nrow(cond5))
+
+#combining columns for condition 5
+cbind_5 <- cbind(5,cond5_houses_sold,cond5_avg_price,cond5_avg_sqft,cond5_avg_price_per_sqft,cond5_avg_bedrooms,cond5_avg_bathrooms)
+
+# Using rbind to view all the conditions in a matrix form
+
+combine_table <- as.data.frame.matrix(rbind(cbind_1,cbind_2,cbind_3,cbind_4,cbind_5))
+
+# Re-naming the cols in the matrix
+colnames(combine_table) <- c("Condition","Houses sold", "Avg Price", "Avg sqft", "Avg price/sqft", "Bedrooms","Bathrooms")
+formattable(combine_table, align = c("c","c","c","c","c","c","c"))
+```
+##### From the above table, Conditions 1 to 5 refer to the condition of the house with 1 being poor and 5 being good.
+
+<p style="color:red"> From table 2, we can see that, houses in better condition are priced higher. Therefore, there is scope for an investor to buy the house in poor condition, upgrade and renovate it and sell it for a premium price.</p> 
